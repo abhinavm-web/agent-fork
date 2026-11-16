@@ -11,6 +11,14 @@ pub use error::AgentForkError;
 
 use colored::Colorize;
 
+fn parse_step_id(raw: &str) -> Result<u64, AgentForkError> {
+    let trimmed = raw.trim();
+    let numeric = trimmed.strip_prefix("step_").unwrap_or(trimmed);
+    numeric
+        .parse::<u64>()
+        .map_err(|_| AgentForkError::InvalidArgument(format!("Invalid step ID: {}", raw)))
+}
+
 pub async fn run_app(cli: Cli) -> Result<i32, AgentForkError> {
     let workspace_root = match cli.workspace {
         Some(w) => w,
@@ -179,20 +187,14 @@ pub async fn run_app(cli: Cli) -> Result<i32, AgentForkError> {
 
             let (old_manifest, new_manifest) = match (step_a, step_b) {
                 (Some(a), Some(b)) => {
-                    let id_a: u64 = a.parse().map_err(|_| {
-                        AgentForkError::InvalidArgument(format!("Invalid step ID: {}", a))
-                    })?;
-                    let id_b: u64 = b.parse().map_err(|_| {
-                        AgentForkError::InvalidArgument(format!("Invalid step ID: {}", b))
-                    })?;
+                    let id_a = parse_step_id(&a)?;
+                    let id_b = parse_step_id(&b)?;
                     let m_a = engine.load_manifest(id_a)?;
                     let m_b = engine.load_manifest(id_b)?;
                     (Some(m_a), Some(m_b))
                 }
                 (Some(a), None) => {
-                    let id_a: u64 = a.parse().map_err(|_| {
-                        AgentForkError::InvalidArgument(format!("Invalid step ID: {}", a))
-                    })?;
+                    let id_a = parse_step_id(&a)?;
                     let m_a = engine.load_manifest(id_a)?;
                     (Some(m_a), None)
                 }
@@ -222,9 +224,7 @@ pub async fn run_app(cli: Cli) -> Result<i32, AgentForkError> {
 
         Commands::Rewind { step, force, clean: _ } => {
             let mut engine = CowEngine::open(&workspace_root)?;
-            let target_step_id: u64 = step.parse().map_err(|_| {
-                AgentForkError::InvalidArgument(format!("Invalid step ID: {}", step))
-            })?;
+            let target_step_id = parse_step_id(&step)?;
 
             engine.rewind(target_step_id, force)?;
 
@@ -241,9 +241,7 @@ pub async fn run_app(cli: Cli) -> Result<i32, AgentForkError> {
 
         Commands::Fork { step, variants } => {
             let mut engine = CowEngine::open(&workspace_root)?;
-            let base_step_id: u64 = step.parse().map_err(|_| {
-                AgentForkError::InvalidArgument(format!("Invalid step ID: {}", step))
-            })?;
+            let base_step_id = parse_step_id(&step)?;
 
             let variants_refs: Vec<&str> = variants.iter().map(|s| s.as_str()).collect();
             engine.fork(base_step_id, &variants_refs)?;
