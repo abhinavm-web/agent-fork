@@ -1,0 +1,47 @@
+[package]
+name = "agent-fork"
+version = "0.1.0"
+edition = "2021"
+authors = ["Abhinav Mahajan <abhinavmahajan91@gmail.com>"]
+description = "OS-level Copy-on-Write time-travel debugger and parallel trajectory forker for AI coding agents"
+repository = "https://github.com/abhinavm-web/agent-fork"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+# CLI Ergonomics
+clap = { version = "4.5", features = ["derive", "env"] }
+colored = "3.1"
+
+# Async Runtime & Networking
+tokio = { version = "1.43", features = ["macros", "rt-multi-thread", "process", "io-util", "fs", "net", "time"] }
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "http2", "json"] }
+hyper = { version = "1.5", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+bytes = "1.10"
+
+# Serialization & Cryptography
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "1.8"
+uuid = { version = "1.15", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+
+# Filesystem & Diffs
+ignore = "0.4"
+similar = { version = "3.2", features = ["text"] }
+
+# Error Handling & Diagnostics
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream"] }
+
+[dev-dependencies]
+tempfile = "3.17"
+assert_cmd = "2.2"
+predicates = "3.1"
+
