@@ -2,6 +2,7 @@
 
 **OS-level Copy-on-Write time-travel debugger and parallel trajectory forker for AI coding agents.**
 
+[![CI](https://github.com/abhinavm-web/agent-fork/actions/workflows/ci.yml/badge.svg)](https://github.com/abhinavm-web/agent-fork/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](Cargo.toml)
 
@@ -38,11 +39,16 @@ Built-in agent rewinds (such as Claude Code's `/rewind`) only track files touche
             +-----------------------+
 ```
 
-## Installation
+## Installation & 30-Second Showcase
 
 ```bash
 git clone https://github.com/abhinavm-web/agent-fork.git
 cd agent-fork
+
+# Run the self-contained Copy-on-Write rewind & trajectory forking showcase
+cargo run --example showcase
+
+# Or install the CLI binary globally
 cargo install --path .
 ```
 
