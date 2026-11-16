@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 450" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; stroke: #30363d; stroke-width: 1.5; }
+      .header { fill: #161b22; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 12px; fill: #8b949e; text-anchor: middle; }
+      .code { font-family: "JetBrains Mono", "Fira Code", Consolas, "Courier New", monospace; font-size: 13px; fill: #c9d1d9; }
+      .prompt { fill: #58a6ff; font-weight: bold; }
+      .cmd { fill: #f0f6fc; font-weight: bold; }
+      .ok { fill: #3fb950; font-weight: bold; }
+      .cyan { fill: #79c0ff; }
+      .yellow { fill: #d29922; }
+      .red { fill: #f85149; }
+      .muted { fill: #8b949e; }
+    </style>
+  </defs>
+  <rect class="bg" x="1" y="1" width="878" height="448" rx="10" ry="10"/>
+  <path class="header" d="M 1 11 Q 1 1 11 1 L 869 1 Q 879 1 879 11 L 879 36 L 1 36 Z"/>
+  <line x1="1" y1="36" x2="879" y2="36" stroke="#30363d" stroke-width="1"/>
+  <circle cx="20" cy="18" r="6" fill="#ff5f56"/>
+  <circle cx="40" cy="18" r="6" fill="#ffbd2e"/>
+  <circle cx="60" cy="18" r="6" fill="#27c93f"/>
+  <text class="title" x="440" y="22">agent-fork — Copy-on-Write Sandbox &amp; Trajectory Forker</text>
+
+  <text class="code" x="24" y="66"><tspan class="prompt">$</tspan> <tspan class="cmd">agent-fork hook install</tspan></text>
+  <text class="code" x="24" y="86"><tspan class="ok">Installed</tspan> Claude Code PostToolUse hook in .claude/settings.local.json</text>
+
+  <text class="code" x="24" y="116"><tspan class="prompt">$</tspan> <tspan class="cmd">agent-fork run -m "Migrate auth + sqlite" -- claude "Refactor auth to JWT"</tspan></text>
+  <text class="code" x="24" y="136"><tspan class="ok">Checkpointed</tspan> step <tspan class="cyan">1</tspan>: Migrate auth + sqlite (<tspan class="ok">+1</tspan> <tspan class="yellow">~2</tspan> <tspan class="red">-0</tspan>)</text>
+
+  <text class="code" x="24" y="166"><tspan class="prompt">$</tspan> <tspan class="cmd">agent-fork log -n 2</tspan></text>
+  <text class="code" x="24" y="186"><tspan class="cyan">step 2</tspan> [<tspan class="yellow">main</tspan>] - Run: bash -c "rm local.sqlite &amp;&amp; npm test" <tspan class="muted">(exit: 1)</tspan></text>
+  <text class="code" x="24" y="204">  Timestamp: 2026-11-16T21:58:14Z | Delta: <tspan class="ok">+0</tspan> <tspan class="yellow">~1</tspan> <tspan class="red">-1</tspan></text>
+  <text class="code" x="24" y="226"><tspan class="cyan">step 1</tspan> [<tspan class="yellow">main</tspan>] - Migrate auth + sqlite <tspan class="muted">(exit: 0)</tspan></text>
+  <text class="code" x="24" y="244">  Timestamp: 2026-11-16T21:57:02Z | Delta: <tspan class="ok">+1</tspan> <tspan class="yellow">~2</tspan> <tspan class="red">-0</tspan></text>
+
+  <text class="code" x="24" y="276"><tspan class="prompt">$</tspan> <tspan class="cmd">agent-fork rewind step_0001 --force</tspan></text>
+  <text class="code" x="24" y="296"><tspan class="ok">Rewound</tspan> workspace to step <tspan class="cyan">1</tspan> <tspan class="muted">(restored local.sqlite + src/auth.rs in 0.8ms)</tspan></text>
+
+  <text class="code" x="24" y="326"><tspan class="prompt">$</tspan> <tspan class="cmd">agent-fork fork step_0001 --variant ed25519-tokens --variant session-cookies</tspan></text>
+  <text class="code" x="24" y="346"><tspan class="ok">Forked</tspan> <tspan class="cyan">2</tspan> branch variants from step <tspan class="cyan">1</tspan>: <tspan class="yellow">ed25519-tokens, session-cookies</tspan></text>
+
+  <text class="code" x="24" y="376"><tspan class="prompt">$</tspan> <tspan class="cmd">agent-fork branches</tspan></text>
+  <text class="code" x="24" y="396"><tspan class="ok">* main</tspan>            (head: step <tspan class="cyan">1</tspan>, base: step <tspan class="cyan">0</tspan>)</text>
+  <text class="code" x="24" y="414">  <tspan class="cmd">ed25519-tokens</tspan>  (head: step <tspan class="cyan">1</tspan>, base: step <tspan class="cyan">1</tspan>)  <tspan class="muted">.agent-fork/branches/ed25519-tokens</tspan></text>
+  <text class="code" x="24" y="432">  <tspan class="cmd">session-cookies</tspan> (head: step <tspan class="cyan">1</tspan>, base: step <tspan class="cyan">1</tspan>)  <tspan class="muted">.agent-fork/branches/session-cookies</tspan></text>
+</svg>

@@ -3,8 +3,13 @@
 **OS-level Copy-on-Write time-travel debugger and parallel trajectory forker for AI coding agents.**
 
 [![CI](https://github.com/abhinavm-web/agent-fork/actions/workflows/ci.yml/badge.svg)](https://github.com/abhinavm-web/agent-fork/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/abhinavm-web/agent-fork)](https://github.com/abhinavm-web/agent-fork/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2021-orange.svg)](Cargo.toml)
+
+<p align="center">
+  <img src="assets/demo.svg" width="860" alt="agent-fork terminal demo">
+</p>
 
 ---
 
@@ -41,6 +46,8 @@ Built-in agent rewinds (such as Claude Code's `/rewind`) only track files touche
 
 ## Installation & 30-Second Showcase
 
+Download prebuilt binaries for Linux, macOS (Apple Silicon), and Windows from [GitHub Releases](https://github.com/abhinavm-web/agent-fork/releases/latest), or build from source:
+
 ```bash
 git clone https://github.com/abhinavm-web/agent-fork.git
 cd agent-fork
@@ -53,6 +60,15 @@ cargo install --path .
 ```
 
 ## Usage
+
+### 0. Install zero-touch per-tool-call hooks for Claude Code
+
+```bash
+# Registers a PostToolUse hook in .claude/settings.local.json so every Bash/Edit/Write
+# tool call inside an interactive Claude Code session automatically checkpoints CoW state
+agent-fork hook install
+agent-fork hook status
+```
 
 ### 1. Run an agent inside the CoW sandbox + cassette proxy
 
@@ -140,6 +156,16 @@ src/
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
+
+## Related Tools (Agent Systems Toolkit)
+
+| Repository | Focus |
+| :--- | :--- |
+| **[agent-fork](https://github.com/abhinavm-web/agent-fork)** | OS-level Copy-on-Write time-travel debugger & parallel trajectory forker for coding agents |
+| **[ctx-firewall](https://github.com/abhinavm-web/ctx-firewall)** | Active LLM context proxy & Ratatui flamegraph profiler that prunes context rot without breaking KV-cache |
+| **[diffmem](https://github.com/abhinavm-web/diffmem)** | Zero-touch "Diff-of-Diffs" episodic failure memory across Claude Code, Cursor, and AGENTS.md |
+| **[reddiff](https://github.com/abhinavm-web/reddiff)** | Zero-prose adversarial diff breaker: runnable crash PoC or silence |
+| **[jitpipe](https://github.com/abhinavm-web/jitpipe)** | JIT-compiled semantic Unix pipes (`sgrep`, `sawk`, `sjq`) streaming at native Rust speed |
 
 ## License
 
