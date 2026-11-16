@@ -5,7 +5,7 @@ pub mod error;
 pub mod process;
 pub mod session;
 
-pub use cli::{CassetteAction, Cli, Commands};
+pub use cli::{CassetteAction, Cli, Commands, HookAction};
 pub use cow::CowEngine;
 pub use error::AgentForkError;
 
@@ -348,6 +348,98 @@ pub async fn run_app(cli: Cli) -> Result<i32, AgentForkError> {
                 CassetteAction::Clear => {
                     store.clear_all(&engine.session.session_id)?;
                     println!("{}", "Cleared all cassettes for session".green());
+                }
+            }
+
+            Ok(0)
+        }
+
+        Commands::Hook { action } => {
+            let claude_dir = workspace_root.join(".claude");
+            let claude_settings = claude_dir.join("settings.local.json");
+            let hook_cmd = "agent-fork checkpoint -q -m \"auto: tool call checkpoint\"";
+
+            match action {
+                HookAction::Install => {
+                    if CowEngine::open(&workspace_root).is_err() {
+                        let _ = CowEngine::init(&workspace_root)?;
+                    }
+                    std::fs::create_dir_all(&claude_dir)?;
+                    let mut root: serde_json::Value = if claude_settings.exists() {
+                        let raw = std::fs::read_to_string(&claude_settings)?;
+                        serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}))
+                    } else {
+                        serde_json::json!({})
+                    };
+
+                    let hooks_obj = root
+                        .as_object_mut()
+                        .ok_or_else(|| AgentForkError::InvalidArgument("Invalid settings.local.json root".to_string()))?
+                        .entry("hooks")
+                        .or_insert_with(|| serde_json::json!({}));
+                    let post_arr = hooks_obj
+                        .as_object_mut()
+                        .ok_or_else(|| AgentForkError::InvalidArgument("Invalid hooks object".to_string()))?
+                        .entry("PostToolUse")
+                        .or_insert_with(|| serde_json::json!([]));
+
+                    if let Some(arr) = post_arr.as_array_mut() {
+                        let already_installed = arr.iter().any(|entry| {
+                            entry.to_string().contains("agent-fork checkpoint")
+                        });
+                        if !already_installed {
+                            arr.push(serde_json::json!({
+                                "matcher": "Bash|Edit|Write|MultiEdit",
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": hook_cmd
+                                    }
+                                ]
+                            }));
+                        }
+                    }
+
+                    std::fs::write(&claude_settings, serde_json::to_string_pretty(&root)?)?;
+                    if !cli.quiet {
+                        println!(
+                            "{} Claude Code PostToolUse hook in {}",
+                            "Installed".bold().green(),
+                            claude_settings.display()
+                        );
+                    }
+                }
+                HookAction::Uninstall => {
+                    if claude_settings.exists() {
+                        let raw = std::fs::read_to_string(&claude_settings)?;
+                        if let Ok(mut root) = serde_json::from_str::<serde_json::Value>(&raw) {
+                            if let Some(arr) = root
+                                .get_mut("hooks")
+                                .and_then(|h| h.get_mut("PostToolUse"))
+                                .and_then(|p| p.as_array_mut())
+                            {
+                                arr.retain(|entry| !entry.to_string().contains("agent-fork checkpoint"));
+                            }
+                            std::fs::write(&claude_settings, serde_json::to_string_pretty(&root)?)?;
+                        }
+                    }
+                    if !cli.quiet {
+                        println!("{}", "Uninstalled agent-fork hooks".bold().green());
+                    }
+                }
+                HookAction::Status => {
+                    let installed = if claude_settings.exists() {
+                        std::fs::read_to_string(&claude_settings)
+                            .map(|s| s.contains("agent-fork checkpoint"))
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    if installed {
+                        println!("Claude Code PostToolUse hook: {}", "INSTALLED".bold().green());
+                    } else {
+                        println!("Claude Code PostToolUse hook: {}", "NOT INSTALLED".yellow());
+                    }
                 }
             }
 

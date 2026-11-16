@@ -157,3 +157,42 @@ fn test_cli_run_forwards_child_exit_code() {
         .assert()
         .code(42);
 }
+
+#[test]
+fn test_cli_hook_install_status_uninstall() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    Command::cargo_bin("agent-fork")
+        .unwrap()
+        .current_dir(root)
+        .args(["hook", "install"])
+        .assert()
+        .success();
+
+    let settings_path = root.join(".claude").join("settings.local.json");
+    assert!(settings_path.exists());
+
+    Command::cargo_bin("agent-fork")
+        .unwrap()
+        .current_dir(root)
+        .args(["hook", "status"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("INSTALLED"));
+
+    Command::cargo_bin("agent-fork")
+        .unwrap()
+        .current_dir(root)
+        .args(["hook", "uninstall"])
+        .assert()
+        .success();
+
+    Command::cargo_bin("agent-fork")
+        .unwrap()
+        .current_dir(root)
+        .args(["hook", "status"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("NOT INSTALLED"));
+}

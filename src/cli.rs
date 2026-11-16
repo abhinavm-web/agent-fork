@@ -136,6 +136,22 @@ pub enum Commands {
         #[command(subcommand)]
         action: CassetteAction,
     },
+
+    /// Install, uninstall, or inspect zero-touch Claude Code and Git checkpoint hooks
+    Hook {
+        #[command(subcommand)]
+        action: HookAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum HookAction {
+    /// Install per-tool-call Claude Code PostToolUse hook and Git post-commit hook
+    Install,
+    /// Remove installed agent-fork hooks from the workspace
+    Uninstall,
+    /// Check installation status of agent-fork hooks
+    Status,
 }
 
 #[derive(Subcommand, Debug)]
