@@ -1,6 +1,6 @@
 [package]
 name = "agent-fork"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Abhinav Mahajan <abhinavmahajan91@gmail.com>"]
 description = "OS-level Copy-on-Write time-travel debugger and parallel trajectory forker for AI coding agents"

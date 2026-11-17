@@ -1,6 +1,6 @@
 # agent-fork
 
-**OS-level Copy-on-Write time-travel debugger and parallel trajectory forker for AI coding agents.**
+Workspace checkpointing, rewind, parallel branch worktrees, and HTTP cassette recording for CLI coding agents.
 
 [![CI](https://github.com/abhinavm-web/agent-fork/actions/workflows/ci.yml/badge.svg)](https://github.com/abhinavm-web/agent-fork/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/abhinavm-web/agent-fork)](https://github.com/abhinavm-web/agent-fork/releases)
@@ -11,28 +11,24 @@
   <img src="assets/demo.svg" width="860" alt="agent-fork terminal demo">
 </p>
 
----
-
 ## Overview
 
-Modern coding agents execute 30–100+ step trajectories across file edits, shell commands, package installs, database migrations, and subagent processes. When an agent goes off the rails at Step 42, you cannot cleanly step back to Step 18, tweak a prompt or tool output, and branch execution.
+Built-in agent undo commands only track edits made through the agent's own file-edit tool. When an agent runs shell commands (`npm install`, `rm`, Python scripts, SQLite migrations, or subagents), those mutations are outside internal tracking.
 
-Built-in agent rewinds (such as Claude Code's `/rewind`) only track files touched by the agent's **internal file-edit tool**. The moment an agent runs `bash` (`npm install`, `rm`, Python scripts, SQLite/Postgres migrations, or subagent workers), internal checkpointing goes blind—leaving mutated filesystems, half-broken dependencies, and dirty state behind.
+`agent-fork` wraps CLI agents (`claude`, `codex`, or custom scripts) with a content-addressed workspace snapshot store and a local HTTP cassette proxy:
 
-`agent-fork` wraps **any** CLI coding agent (Claude Code, Codex, Gemini CLI, OpenCode, or custom scripts) in a **content-addressed Copy-on-Write (CoW) workspace sandbox** paired with a **local HTTP/SSE LLM & MCP cassette proxy**:
-
-- **Zero-overhead CoW snapshots**: Captures full workspace trees (`blake3`-indexed content-addressed object store with hardlink/reflink materialization) on every turn boundary or explicit checkpoint, including shell side effects, generated binaries, and local SQLite files.
-- **Deterministic LLM/MCP Cassette Proxy**: Intercepts `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` traffic, recording request/response turns alongside each filesystem checkpoint so historical steps can be inspected, edited, and replayed.
-- **Parallel Trajectory Forking**: Rewind the workspace to any historical step or fork multiple isolated branch worktrees side-by-side from a shared checkpoint, compare diffs, and promote the winning trajectory back into the primary workspace.
+- **Content-addressed workspace snapshots**: Indexes workspace files with `blake3` in `.agent-fork/storage` and materializes branch worktrees via `std::fs::copy` (OS kernel clones/reflinks on supported filesystems). On a 300-file workspace, incremental checkpoints take `~200 ms`, rewinds take `~250 ms`, and parallel 2-branch forks (600 files) take `~994 ms`.
+- **LLM/MCP cassette proxy**: Intercepts `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` traffic, recording request/response turns alongside each checkpoint so turns can be inspected or edited.
+- **Parallel branch worktrees**: Rewind the primary workspace to an earlier step, fork isolated branch worktrees from any checkpoint, compare diffs, and promote the selected branch back to `main`.
 
 ```text
-  Agent Process (claude / codex / gemini / custom script)
+  Agent Process (claude / codex / custom script)
          |                              |
          v                              v
   +--------------+              +-------------------+
-  | Local HTTP   |<------------>| CoW Filesystem    |
-  | Cassette     |              | Snapshot Engine   |
-  | Proxy (Axum) |              | (blake3 + CoW)    |
+  | Local HTTP   |<------------>| Snapshot Engine   |
+  | Cassette     |              | (blake3 CAS +     |
+  | Proxy (Axum) |              |  kernel copy/CoW) |
   +------+-------+              +---------+---------+
          |                                |
          +--------------+-----------------+
@@ -44,12 +40,12 @@ Built-in agent rewinds (such as Claude Code's `/rewind`) only track files touche
             +-----------------------+
 ```
 
-## Installation & 30-Second Showcase
+## Installation
 
-Install prebuilt binaries with one command, download directly from [GitHub Releases](https://github.com/abhinavm-web/agent-fork/releases/latest), or build from source:
+Install prebuilt binaries, download an archive from [GitHub Releases](https://github.com/abhinavm-web/agent-fork/releases/latest), or build from source:
 
 ```bash
-# macOS (Apple Silicon) & Linux (x86_64)
+# macOS (Apple Silicon) and Linux (x86_64)
 curl -fsSL https://raw.githubusercontent.com/abhinavm-web/agent-fork/main/install.sh | sh
 ```
 
@@ -58,153 +54,131 @@ curl -fsSL https://raw.githubusercontent.com/abhinavm-web/agent-fork/main/instal
 irm https://raw.githubusercontent.com/abhinavm-web/agent-fork/main/install.ps1 | iex
 ```
 
-Or run from source:
+From source:
 
 ```bash
 git clone https://github.com/abhinavm-web/agent-fork.git
 cd agent-fork
-
-# Run the self-contained Copy-on-Write rewind & trajectory forking showcase
 cargo run --example showcase
-
-# Or install the CLI binary globally
 cargo install --path .
 ```
 
 ## Usage
 
-### 0. Install zero-touch per-tool-call hooks for Claude Code
+### Claude Code PostToolUse hook
 
 ```bash
-# Registers a PostToolUse hook in .claude/settings.local.json so every Bash/Edit/Write
-# tool call inside an interactive Claude Code session automatically checkpoints CoW state
+# Register a PostToolUse hook in .claude/settings.local.json to checkpoint after Bash/Edit/Write calls
 agent-fork hook install
 agent-fork hook status
 ```
 
-### 1. Run an agent inside the CoW sandbox + cassette proxy
+### Run an agent with snapshots and cassette recording
 
 ```bash
-# Automatically snapshots pre/post workspace state and routes API calls through the local cassette proxy
+# Snapshot pre/post workspace state and route API calls through the local cassette proxy
 agent-fork run -m "Refactor auth to JWT" -- claude "Refactor auth to JWT and migrate local sqlite db"
 
-# Record filesystem mutations only (disable HTTP proxy interception)
+# Record filesystem mutations without the HTTP proxy
 agent-fork run --no-proxy -- pytest -q
 ```
 
-### 2. Inspect the timeline and diffs
+### Inspect timeline and diffs
 
 ```bash
-# View recorded steps, modification counts, and linked cassette turns
 agent-fork log
-
-# Output timeline as structured JSON
 agent-fork log --json
 
-# Compare any two steps or compare a step against the current working tree
 agent-fork diff step_0001 step_0002
 agent-fork diff step_0001 --stat
 ```
 
-### 3. Rewind or fork parallel trajectories
+### Rewind and fork branches
 
 ```bash
-# Create an explicit manual checkpoint at any point
 agent-fork checkpoint -m "Before database migration"
-
-# Rewind workspace files (and clean untracked build artifacts) back to step 1
 agent-fork rewind step_0001 --force
 
-# Fork two isolated branch worktrees from step 1 to test competing approaches in parallel
+# Create isolated worktrees from step 1
 agent-fork fork step_0001 --variant session-cookies --variant jwt-rotation
-
-# List active branches and their step pointers
 agent-fork branches
-
-# Promote the winning variant branch back into the main workspace
 agent-fork promote jwt-rotation --force
 ```
 
-### 4. Inspect and edit recorded LLM/MCP cassette turns
+### Inspect and edit recorded cassettes
 
 ```bash
-# List recorded API turns
 agent-fork cassette list
-
-# Inspect full request and response payload for a turn
 agent-fork cassette show <cassette-id>
-
-# Modify a recorded prompt or tool output for deterministic replay
 agent-fork cassette edit <cassette-id> --prompt "Use Ed25519 keys instead of RS256"
 ```
 
-## Architecture
+## Benchmarks and Scope
 
-```text
-src/
-├── cli.rs              # Clap CLI definition & subcommands
-├── error.rs            # Typed error hierarchy (ForkError)
-├── cow/
-│   ├── engine.rs       # Workspace snapshot, restore, and branch materialization
-│   ├── storage.rs      # Content-addressed blake3 blob store (.agent-fork/objects)
-│   ├── manifest.rs     # Per-step file metadata & hash manifests
-│   ├── diff.rs         # Unified diff & line-stat computation across steps
-│   └── ignore.rs       # .gitignore and sandbox exclusion filters
-├── cassette/
-│   ├── proxy.rs        # Axum HTTP proxy intercepting Anthropic & OpenAI turns
-│   ├── store.rs        # Cassette persistence (.agent-fork/cassettes)
-│   ├── edit.rs         # Turn prompt/response mutation
-│   └── signature.rs    # Deterministic request fingerprinting
-├── process/
-│   └── runner.rs       # Child process spawning with injected proxy env vars
-└── session/
-    ├── timeline.rs     # Step history & pointer state machine
-    └── branch.rs       # Isolated branch worktree management & promotion
-```
-
-## Benchmark & Scope Guarantees
-
-Reproduce on your machine:
+Reproduce locally:
 
 ```bash
 cargo run --release --example benchmark
 ```
 
-Measured on a **300-file workspace** (with `blake3` content-addressed deduplication and kernel `fs::copy` / CoW reflink branch materialization):
+Measured on a 300-file workspace with `blake3` content-addressed deduplication and `materialize_cow` (`fs::copy`):
 
 | Operation | Measured Latency | Verification |
 | :--- | ---: | :--- |
 | Initial 300-file snapshot (`Step 0`) | 669.62 ms | `blake3` indexed |
 | Incremental checkpoint (5 modified files) | 199.41 ms | Delta `+0 ~5 -0` |
-| Parallel 2-branch CoW fork (600 files) | 993.95 ms | Isolated worktrees |
-| Rewind after 30 destructive file ops | 248.56 ms | **300 / 300 hashes intact (100%)** |
+| Parallel 2-branch fork (600 files) | 993.95 ms | Isolated worktrees |
+| Rewind after 30 destructive file ops | 248.56 ms | 300 / 300 hashes intact (100%) |
 
-### What `agent-fork` Captures vs. What Is Out of Scope
+### Scope
 
-| Artifact / Side Effect | Captured & Rewound? | Mechanism |
+| Artifact / Side Effect | Captured & Rewound | Mechanism |
 | :--- | :---: | :--- |
-| Workspace source files, `bash` edits, build outputs | **Yes** | Content-addressed `blake3` CAS + CoW worktrees |
-| File-backed local databases (`SQLite`, JSON/DuckDB files in workspace) | **Yes** | Snapshotted on every checkpoint/rewind |
-| Anthropic / OpenAI HTTP LLM & MCP turns | **Yes** | Recorded & editable via built-in Axum cassette proxy |
-| Remote databases (external Postgres/Redis) & network side effects | **No** | External state outside workspace root |
-| Live background daemons / in-memory process state | **No** | Process exit/restart boundary (use `hook install` per tool call) |
+| Workspace source files, `bash` edits, build outputs | Yes | Content-addressed `blake3` CAS + worktrees |
+| File-backed local databases (`SQLite`, JSON/DuckDB files in workspace) | Yes | Snapshotted on every checkpoint/rewind |
+| Anthropic / OpenAI HTTP LLM and MCP turns | Yes | Recorded and editable via local Axum cassette proxy |
+| Remote databases (external Postgres/Redis) and network side effects | No | External state outside workspace root |
+| Live background daemons / in-memory process state | No | Process exit/restart boundary (use `hook install` per tool call) |
 
-## Development & Verification
+## Architecture
+
+```text
+src/
+├── cli.rs              # Clap CLI definition and subcommands
+├── error.rs            # Typed error hierarchy (AgentForkError)
+├── cow/
+│   ├── engine.rs       # Workspace snapshot, restore, and branch materialization
+│   ├── storage.rs      # Content-addressed blake3 blob store (.agent-fork/storage)
+│   ├── manifest.rs     # Per-step file metadata and hash manifests
+│   ├── diff.rs         # Unified diff and line-stat computation across steps
+│   └── ignore.rs       # .gitignore and sandbox exclusion filters
+├── cassette/
+│   ├── proxy.rs        # Axum HTTP proxy intercepting Anthropic and OpenAI turns
+│   ├── store.rs        # Cassette persistence (.agent-fork/cassettes)
+│   ├── edit.rs         # Turn prompt/response mutation
+│   └── signature.rs    # Deterministic request fingerprinting
+├── process/
+│   └── runner.rs       # Child process spawning with proxy env vars
+└── session/
+    ├── timeline.rs     # Step history and pointer state machine
+    └── branch.rs       # Isolated branch worktree management and promotion
+```
+
+## Development
 
 ```bash
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-## Related Tools (Agent Systems Toolkit)
+## See Also
 
-| Repository | Focus |
+| Repository | Description |
 | :--- | :--- |
-| **[agent-fork](https://github.com/abhinavm-web/agent-fork)** | OS-level Copy-on-Write time-travel debugger & parallel trajectory forker for coding agents |
-| **[ctx-firewall](https://github.com/abhinavm-web/ctx-firewall)** | Active LLM context proxy & Ratatui flamegraph profiler that prunes context rot without breaking KV-cache |
-| **[diffmem](https://github.com/abhinavm-web/diffmem)** | Zero-touch "Diff-of-Diffs" episodic failure memory across Claude Code, Cursor, and AGENTS.md |
-| **[reddiff](https://github.com/abhinavm-web/reddiff)** | Zero-prose adversarial diff breaker: runnable crash PoC or silence |
-| **[jitpipe](https://github.com/abhinavm-web/jitpipe)** | JIT-compiled semantic Unix pipes (`sgrep`, `sawk`, `sjq`) streaming at native Rust speed |
+| **[ctx-firewall](https://github.com/abhinavm-web/ctx-firewall)** | Active LLM context proxy and terminal profiler with KV-cache prefix pinning |
+| **[diffmem](https://github.com/abhinavm-web/diffmem)** | Git diff-of-diffs episodic memory daemon and editor rule sync |
+| **[reddiff](https://github.com/abhinavm-web/reddiff)** | Differential regression finder that emits runnable crash reproducers only |
+| **[jitpipe](https://github.com/abhinavm-web/jitpipe)** | Sample-driven compiled Unix pipes (`sgrep`, `sawk`, `sjq`) |
 
 ## License
 
