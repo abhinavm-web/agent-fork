@@ -103,4 +103,36 @@ impl CasStore {
 
         self.store_bytes(&bytes, hash)
     }
+
+    /// Materializes a CAS object directly to `target` via OS-level `fs::copy`
+    /// (invoking APFS `fclonefileat` on macOS, `copy_file_range` reflinks on Linux,
+    /// and kernel `CopyFileExW` on Windows without allocating a user-space buffer).
+    pub fn materialize_cow(
+        &self,
+        hash: &str,
+        target: &Path,
+        is_exec: bool,
+    ) -> Result<(), AgentForkError> {
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|e| AgentForkError::IoWithPath {
+                path: parent.display().to_string(),
+                source: e,
+            })?;
+        }
+
+        let src = self.object_path(hash);
+        fs::copy(&src, target).map_err(|e| AgentForkError::IoWithPath {
+            path: target.display().to_string(),
+            source: e,
+        })?;
+
+        #[cfg(unix)]
+        if is_exec {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(target, fs::Permissions::from_mode(0o755));
+        }
+        let _ = is_exec;
+
+        Ok(())
+    }
 }

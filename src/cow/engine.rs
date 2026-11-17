@@ -417,11 +417,11 @@ impl CowEngine {
             let worktree_dir = branch_dir.join("worktree");
             fs::create_dir_all(&worktree_dir)?;
 
-            // Restore files from base_manifest into worktree_dir
+            // Materialize files from base_manifest into worktree_dir via kernel CoW copy
             for (rel_path, entry) in &base_manifest.files {
                 let target_path = worktree_dir.join(rel_path);
-                let bytes = self.cas.read_bytes(&entry.hash)?;
-                safe_replace_file(&target_path, &bytes, entry.is_executable)?;
+                self.cas
+                    .materialize_cow(&entry.hash, &target_path, entry.is_executable)?;
             }
 
             // Write branch.json

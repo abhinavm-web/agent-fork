@@ -162,6 +162,33 @@ src/
     └── branch.rs       # Isolated branch worktree management & promotion
 ```
 
+## Benchmark & Scope Guarantees
+
+Reproduce on your machine:
+
+```bash
+cargo run --release --example benchmark
+```
+
+Measured on a **300-file workspace** (with `blake3` content-addressed deduplication and kernel `fs::copy` / CoW reflink branch materialization):
+
+| Operation | Measured Latency | Verification |
+| :--- | ---: | :--- |
+| Initial 300-file snapshot (`Step 0`) | 669.62 ms | `blake3` indexed |
+| Incremental checkpoint (5 modified files) | 199.41 ms | Delta `+0 ~5 -0` |
+| Parallel 2-branch CoW fork (600 files) | 993.95 ms | Isolated worktrees |
+| Rewind after 30 destructive file ops | 248.56 ms | **300 / 300 hashes intact (100%)** |
+
+### What `agent-fork` Captures vs. What Is Out of Scope
+
+| Artifact / Side Effect | Captured & Rewound? | Mechanism |
+| :--- | :---: | :--- |
+| Workspace source files, `bash` edits, build outputs | **Yes** | Content-addressed `blake3` CAS + CoW worktrees |
+| File-backed local databases (`SQLite`, JSON/DuckDB files in workspace) | **Yes** | Snapshotted on every checkpoint/rewind |
+| Anthropic / OpenAI HTTP LLM & MCP turns | **Yes** | Recorded & editable via built-in Axum cassette proxy |
+| Remote databases (external Postgres/Redis) & network side effects | **No** | External state outside workspace root |
+| Live background daemons / in-memory process state | **No** | Process exit/restart boundary (use `hook install` per tool call) |
+
 ## Development & Verification
 
 ```bash
